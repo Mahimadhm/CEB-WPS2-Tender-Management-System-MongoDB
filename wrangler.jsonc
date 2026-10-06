@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ceb-wps2-tender-management-system",
+  "main": "backend/src/worker.js",
+  "compatibility_date": "2026-08-28",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "CORS_ORIGIN": "https://ceb-tms-frontend.skpthiran.workers.dev"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "RATE_LIMIT_KV",
+      "id": "b5274e25c1bb48b1a3b6addb9ffe1b3a"
+    }
+  ],
+  "triggers": {
+    "crons": [
+      "30 2 * * *"
+    ]
+  },
+  "define": {
+    "import.meta.url": "\"https://workers.cloudflare.com/worker.js\""
+  }
+}

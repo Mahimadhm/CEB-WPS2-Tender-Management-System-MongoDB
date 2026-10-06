@@ -1,0 +1,152 @@
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, Save } from 'lucide-react';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { Select } from '../components/ui/Select';
+import { Textarea } from '../components/ui/Textarea';
+import { CategoryItem } from '../utils/types';
+import { apiFetch } from '../utils/api';
+import { useRolePath } from '../utils/rolePath';
+
+export function AddEditCategoryPage() {
+  const navigate = useNavigate();
+  const { path } = useRolePath();
+  const { id } = useParams();
+  const isEdit = !!id;
+
+  const [formData, setFormData] = useState<Partial<CategoryItem>>({
+    status: 'Active'
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(isEdit);
+
+  useEffect(() => {
+    if (isEdit) {
+      (async () => {
+        setIsLoading(true);
+        try {
+          const res = await apiFetch(`/api/categories/${id}`);
+          if (res.ok) {
+            const data = await res.json();
+            setFormData({ ...data, id: data._id || data.id });
+          } else {
+            setErrors({ submit: 'Failed to load category details' });
+          }
+        } catch (err: any) {
+          console.error('Failed to load category', err);
+          setErrors({ submit: err.message || 'Failed to load category details' });
+        } finally {
+          setIsLoading(false);
+        }
+      })();
+    }
+  }, [id, isEdit]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    if (errors[name]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
+  };
+
+  const validate = () => {
+    const newErrors: Record<string, string> = {};
+    if (!formData.name) newErrors.name = 'Category name is required';
+    if (!formData.description) newErrors.description = 'Description is required';
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (validate()) {
+      (async () => {
+        try {
+          const url = isEdit ? `/api/categories/${id}` : '/api/categories';
+          const method = isEdit ? 'PUT' : 'POST';
+          const res = await apiFetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ message: 'Failed to save category' }));
+            setErrors({ submit: err.message || 'Failed to save category' });
+            return;
+          }
+          navigate(path('/categories'));
+        } catch (err) {
+          console.error(err);
+          setErrors({ submit: 'Failed to save category due to a network error' });
+        }
+      })();
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-12 h-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <span className="ml-3 text-slate-600 font-medium">Loading category details...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-6">
+      <div className="flex items-center gap-4 mb-6">
+        <button onClick={() => navigate(path('/categories'))} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+          <ArrowLeft className="w-5 h-5 text-slate-600" />
+        </button>
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900">
+            {isEdit ? 'Edit Category' : 'Add New Category'}
+          </h2>
+          <p className="text-slate-500">
+            {isEdit ? `Editing ${formData.name}` : 'Create a new tender category'}
+          </p>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 md:p-8">
+        {errors.submit && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm">
+            {errors.submit}
+          </div>
+        )}
+        <div className="space-y-6">
+          <Input label="Category Name" name="name" value={formData.name || ''} onChange={handleChange} error={errors.name} placeholder="e.g. IT Equipment" />
+
+          <Textarea label="Description" name="description" value={formData.description || ''} onChange={handleChange} error={errors.description} placeholder="Detailed description of this category..." rows={4} />
+
+          <Select label="Status" name="status" value={formData.status || 'Active'} onChange={handleChange} options={[{
+            value: 'Active',
+            label: 'Active'
+          }, {
+            value: 'Inactive',
+            label: 'Inactive'
+          }]} />
+        </div>
+
+        <div className="flex items-center justify-end gap-4 mt-8 pt-6 border-t border-slate-100">
+          <Button type="button" variant="secondary" onClick={() => navigate(path('/categories'))}>
+            Back to Categories
+          </Button>
+          <Button type="submit" className="flex items-center gap-2">
+            <Save className="w-4 h-4" />
+            {isEdit ? 'Save Changes' : 'Create Category'}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}

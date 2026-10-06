@@ -1,0 +1,128 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Edit2, Trash2 } from 'lucide-react';
+import { DataTable } from '../components/shared/DataTable';
+import { Button } from '../components/ui/Button';
+import { Modal } from '../components/ui/Modal';
+import { Staff } from '../utils/types';
+import { apiFetch } from '../utils/api';
+import { useRolePath } from '../utils/rolePath';
+import { useAuth } from '../context/AuthContext';
+import { can } from '../utils/permissions';
+
+export function TecStaffPage() {
+  const navigate = useNavigate();
+  const { path } = useRolePath();
+  const { user } = useAuth();
+  const [staff, setStaff] = useState<Staff[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const canAdd = can('add', user?.role);
+  const canEdit = can('edit', user?.role);
+  const canDelete = can('delete', user?.role);
+
+  const handleDelete = () => {
+    (async () => {
+      if (!deleteId || !canDelete) return;
+      try {
+        const res = await apiFetch(`/api/staff/${deleteId}`, {
+          method: 'DELETE'
+        });
+        if (res.ok) {
+          setStaff(prev => prev.filter(s => s.id !== deleteId));
+        } else {
+          const err = await res.json().catch(() => ({ message: 'Failed to remove staff' }));
+          alert(err.message || 'Failed to remove staff');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Failed to remove staff');
+      } finally {
+        setDeleteId(null);
+      }
+    })();
+  };
+
+  useEffect(() => {
+    const load = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const res = await apiFetch('/api/staff');
+        if (!res.ok) throw new Error('Failed to fetch staff members from server');
+        const data = await res.json();
+        const mapped = Array.isArray(data) ? data.map((s: any) => ({
+          ...s,
+          id: s._id || s.id
+        })) : [];
+        setStaff(mapped);
+      } catch (err: any) {
+        console.error('Failed to load staff', err);
+        setError(err.message || 'Failed to load staff members');
+        setStaff([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    load();
+  }, []);
+  const columns = [{
+    header: 'Name',
+    accessorKey: 'name' as keyof Staff
+  }, {
+    header: 'Email',
+    accessorKey: 'email' as keyof Staff,
+    cell: (item: Staff) => item.email || '-'
+  }, {
+    header: 'Unit',
+    accessorKey: 'area' as keyof Staff
+  }, {
+    header: 'Designation',
+    accessorKey: 'designation' as keyof Staff
+  }, ...(canEdit || canDelete ? [{
+    header: 'Actions',
+    accessorKey: 'id' as keyof Staff,
+    cell: (item: Staff) => <div className="flex items-center gap-2">
+      {canEdit && (
+        <button onClick={() => navigate(path(`/tec-staff/edit/${item.id}`))} className="p-1 text-slate-400 hover:text-blue-600 transition-colors" title="Edit">
+          <Edit2 className="w-4 h-4" />
+        </button>
+      )}
+      {canDelete && (
+        <button onClick={() => setDeleteId(item.id)} className="p-1 text-slate-400 hover:text-red-600 transition-colors" title="Delete">
+          <Trash2 className="w-4 h-4" />
+        </button>
+      )}
+    </div>
+  }] : [])];
+  return <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900">Staff</h2>
+          <p className="text-slate-500">Manage committee members and staff</p>
+        </div>
+        {canAdd && (
+          <Button onClick={() => navigate(path('/tec-staff/add'))} leftIcon={<Plus className="w-4 h-4" />}>
+            Add Staff Member
+          </Button>
+        )}
+      </div>
+
+      <DataTable data={staff} columns={columns} searchKey="name" searchPlaceholder="Search staff by name..." isLoading={isLoading} error={error} emptyMessage="No staff members found." />
+
+      <Modal isOpen={!!deleteId} onClose={() => setDeleteId(null)} title="Remove Staff Member" footer={<>
+            <Button variant="ghost" onClick={() => setDeleteId(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={handleDelete}>
+              Remove
+            </Button>
+          </>}>
+        <p className="text-slate-600">
+          Are you sure you want to remove this staff member?
+        </p>
+      </Modal>
+    </div>;
+}
